@@ -1,0 +1,485 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Vibe Coding IDE</title>
+    <link rel="stylesheet" href="style_enhanced_with_clock.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.44.0/min/vs/loader.min.js"></script>
+    <style>
+        /* Make the topmost editor toolbar white in light mode, keep default in dark */
+        [data-color-scheme="light"] .editor-toolbar {
+            background-color: #fff !important;
+            border-bottom: 1px solid #eee !important;
+            color: #222 !important;
+        }
+
+        [data-color-scheme="light"] .terminal-header {
+            background-color: #f3f3f3 !important;
+            border-bottom: 1px solid #eee !important;
+            color: #222 !important;
+        }
+
+        [data-color-scheme="light"] .assistant-message {
+            color: #000 !important;
+        }
+
+        #terminal-output .terminal-line.command {
+            color: #1DB954 !important;
+            /* Spotify green */
+        }
+    </style>
+</head>
+
+<body>
+    <!-- Search Panel -->
+    <div id="search-panel" class="search-panel" style="display: none;">
+        <div class="search-panel-header">
+            <div class="search-panel-title">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+                    <circle cx="11" cy="11" r="8"></circle>
+                    <path d="m21 21-4.35-4.35"></path>
+                </svg>
+                Find & Replace
+            </div>
+            <button class="search-close-btn" onclick="toggleSearchPanel(false)">×</button>
+        </div>
+        <div class="search-panel-content">
+            <div class="search-input-group">
+                <input type="text" id="search-input" placeholder="Find in code...">
+                <div class="search-controls">
+                    <button class="search-btn" onclick="findPrevious()" title="Previous match (Shift+F3)">
+                        <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor">
+                            <polyline points="15 18 9 12 15 6"></polyline>
+                        </svg>
+                    </button>
+                    <button class="search-btn" onclick="findNext()" title="Next match (F3)">
+                        <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor">
+                            <polyline points="9 18 15 12 9 6"></polyline>
+                        </svg>
+                    </button>
+                </div>
+            </div>
+
+            <div class="search-options">
+                <label class="search-option">
+                    <input type="checkbox" id="match-case"> Match Case
+                </label>
+                <label class="search-option">
+                    <input type="checkbox" id="match-whole-word"> Whole Word
+                </label>
+                <label class="search-option">
+                    <input type="checkbox" id="use-regex"> Regex
+                </label>
+            </div>
+
+            <div class="search-toggle-replace">
+                <button id="toggle-replace" onclick="toggleReplaceMode()">
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor">
+                        <polyline points="9 18 15 12 9 6"></polyline>
+                    </svg>
+                    Replace
+                </button>
+            </div>
+
+            <div id="replace-section" class="replace-section" style="display: none;">
+                <input type="text" id="replace-input" placeholder="Replace with...">
+                <div style="display: flex; gap: 8px; margin-top: 8px;">
+                    <button class="search-btn" onclick="replaceOne()" title="Replace current match">Replace</button>
+                    <button class="search-btn" onclick="replaceAll()" title="Replace all matches">Replace All</button>
+                </div>
+            </div>
+
+            <div id="search-results" class="search-results">No results</div>
+        </div>
+    </div>
+
+    <!-- Left Sidebar -->
+    <div class="sidebar sidebar-left">
+        <div class="sidebar-icon" id="search-icon" onclick="toggleSearchPanel(true)">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                stroke-linecap="round" stroke-linejoin="round">
+                <circle cx="11" cy="11" r="8"></circle>
+                <path d="m21 21-4.35-4.35"></path>
+            </svg>
+            <div class="sidebar-label">Search Code</div>
+        </div>
+
+        <div class="sidebar-icon" onclick="window.open('https://music.youtube.com', '_blank')">
+            <!-- YouTube Music Logo SVG -->
+            <svg width="24" height="24" viewBox="0 0 48 48" fill="none">
+                <circle cx="24" cy="24" r="24" fill="#FF0000" />
+                <circle cx="24" cy="24" r="24" fill="#fff" />
+                <circle cx="24" cy="24" r="12" fill="#FF0000" />
+                <polygon points="31,23 20,30 20,18" fill="#fff" />
+            </svg>
+            <div class="sidebar-label">YouTube Music</div>
+        </div>
+
+        <div class="sidebar-icon" onclick="window.open('https://open.spotify.com', '_blank')">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor">
+                <circle cx="12" cy="12" r="12" fill="#1DB954" />
+                <path
+                    d="M17.6 16.2c-.2 0-.3 0-.5-.1-3.2-2-7.2-2.4-11.1-1.2-.4.1-.8-.1-.9-.5-.1-.4.1-.8.5-.9 4.2-1.3 8.6-.9 12.1 1.3.4.2.5.7.3 1.1-.1.2-.4.3-.7.3zm1-2.7c-.2 0-.4-.1-.6-.2-3.7-2.3-9.3-2.9-13.1-1.4-.4.2-.9 0-1.1-.4-.2-.4 0-.9.4-1.1 4.2-1.7 10.2-1 14.3 1.6.4.2.5.7.3 1.1-.1.2-.4.4-.7.4zm1.1-2.8c-.2 0-.4-.1-.6-.2-4.2-2.6-11.1-2.8-15-.9-.4.2-.9 0-1.1-.4-.2-.4 0-.9.4-1.1 4.4-2.1 11.8-1.8 16.5 1 .4.2.5.7.3 1.1-.2.3-.4.5-.7.5z"
+                    fill="#fff" />
+            </svg>
+            <div class="sidebar-label">Spotify</div>
+        </div>
+
+        <div class="sidebar-icon" id="cheatsheet-icon" onclick="toggleCheatsheetPanel()">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                stroke-linecap="round" stroke-linejoin="round">
+                <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+                <polyline points="14 2 14 8 20 8"></polyline>
+                <line x1="16" y1="13" x2="8" y2="13"></line>
+                <line x1="16" y1="17" x2="8" y2="17"></line>
+                <polyline points="10 9 9 9 8 9"></polyline>
+            </svg>
+            <div class="sidebar-label">Cheatsheet</div>
+        </div>
+
+        <div class="sidebar-icon" id="theme-toggle" onclick="toggleTheme()">
+            <span id="theme-toggle-icon"></span>
+            <div class="sidebar-label">Toggle Theme</div>
+        </div>
+    </div>
+
+    <!-- Main Content -->
+    <div class="main-content">
+        <!-- Split Container -->
+        <div class="split-container">
+            <!-- Editor Panel -->
+            <div class="editor-panel">
+                <div class="editor-toolbar">
+                    <button class="run-button" onclick="runPythonCode()">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+                            <polygon points="5 3 19 12 5 21 5 3"></polygon>
+                        </svg>
+                        Run
+                    </button>
+                    <span class="editor-title">main.py</span>
+                </div>
+                <div id="monaco-editor"></div>
+            </div>
+
+            <!-- Vertical Resizer -->
+            <div class="vertical-resizer"></div>
+
+            <!-- Chat Panel -->
+            <div class="chat-panel">
+                <div class="chat-header">
+                    <h3>AI Assistant</h3>
+                    <p>Ask questions about your code or get programming help</p>
+                </div>
+
+                <div id="chat-messages" class="chat-messages">
+                    <div class="welcome-message">
+                        👋 Hi! I'm your coding assistant. Ask me anything about Python, algorithms, or get help with
+                        your code!
+                    </div>
+                </div>
+
+                <div class="chat-input-container">
+                    <input type="text" id="chat-input" placeholder="Ask me anything about coding...">
+                    <button class="chat-send-button" onclick="sendMessageToChatGPT()">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                            stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <line x1="22" y1="2" x2="11" y2="13"></line>
+                            <polygon points="22,2 15,22 11,13 2,9"></polygon>
+                        </svg>
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Terminal Resizer -->
+        <div class="terminal-resizer"></div>
+
+        <!-- Terminal Container -->
+        <div class="terminal-container">
+            <div class="terminal-panel">
+                <div class="terminal-header">
+                    <span class="terminal-title">Terminal</span>
+                    <div class="terminal-controls">
+                        <button class="terminal-download" onclick="downloadTranscript()"
+                            title="Download Transcript">⬇</button>
+                        <button class="terminal-clear" onclick="clearTerminal()">Clear</button>
+                        <button class="terminal-toggle" onclick="toggleTerminal()">—</button>
+                    </div>
+                </div>
+                <div class="terminal-content">
+                    <div id="terminal-output"></div>
+                    <div class="terminal-input-line">
+                        <span class="terminal-prompt">$</span>
+                        <input type="text" id="terminal-input" placeholder="Type a command..."
+                            onkeypress="handleTerminalInput(event)">
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Right Sidebar -->
+    <div class="sidebar sidebar-right">
+        <div class="sidebar-icon" id="copy-code-icon" onclick="copyLatestCode()">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                stroke-linecap="round" stroke-linejoin="round">
+                <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+                <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+            </svg>
+            <div class="sidebar-label">Copy Code</div>
+        </div>
+
+        <div class="sidebar-icon" onclick="window.open('https://github.com', '_blank')">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor">
+                <path
+                    d="M12 2C6.477 2 2 6.484 2 12.017c0 4.425 2.865 8.18 6.839 9.504.5.092.682-.217.682-.483 0-.237-.008-.868-.013-1.703-2.782.605-3.369-1.343-3.369-1.343-.454-1.158-1.11-1.466-1.11-1.466-.908-.62.069-.608.069-.608 1.003.07 1.531 1.032 1.531 1.032.892 1.53 2.341 1.088 2.91.832.092-.647.35-1.088.636-1.338-2.22-.253-4.555-1.113-4.555-4.951 0-1.093.39-1.988 1.029-2.688-.103-.253-.446-1.272.098-2.65 0 0 .84-.27 2.75 1.026A9.564 9.564 0 0112 6.844c.85.004 1.705.115 2.504.337 1.909-1.296 2.747-1.027 2.747-1.027.546 1.379.202 2.398.1 2.651.64.7 1.028 1.595 1.028 2.688 0 3.848-2.339 4.695-4.566 4.943.359.309.678.92.678 1.855 0 1.338-.012 2.419-.012 2.747 0 .268.18.58.688.482A10.019 10.019 0 0022 12.017C22 6.484 17.522 2 12 2z" />
+            </svg>
+            <div class="sidebar-label">GitHub</div>
+        </div>
+
+        <div class="sidebar-icon" onclick="window.open('https://stackoverflow.com', '_blank')">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor">
+                <path d="M15 21h-4V8l4-4V21zM4 17v4h2v-4H4zm4-8v12h2V9H8zm4-6v18h2V3h-2zm4 4v14h2V7h-2z" />
+            </svg>
+            <div class="sidebar-label">Stack Overflow</div>
+        </div>
+        <div class="sidebar-icon" id="examples-icon" onclick="toggleExamplesPanel()">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                stroke-linecap="round" stroke-linejoin="round">
+                <polyline points="16 18 22 12 16 6"></polyline>
+                <polyline points="8 6 2 12 8 18"></polyline>
+            </svg>
+            <div class="sidebar-label">Code Examples</div>
+        </div>
+        <div class="sidebar-icon" id="notes-icon" onclick="toggleNotesPanel()">
+            <!-- Simple sticky-note icon -->
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"
+                stroke-linecap="round" stroke-linejoin="round">
+                <path d="M21 15V7a2 2 0 0 0-2-2H7L3 8v9a2 2 0 0 0 2 2h11"></path>
+                <path d="M16 3v4a1 1 0 0 0 1 1h4" />
+                <rect x="7" y="13" width="6" height="2" rx="1" fill="currentColor" opacity="0.2"></rect>
+            </svg>
+            <div class="sidebar-label">Notes</div>
+        </div>
+        <div class="sidebar-icon" id="clock-icon" onclick="showClock()">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                stroke-linecap="round" stroke-linejoin="round">
+                <circle cx="12" cy="12" r="10"></circle>
+                <polyline points="12,6 12,12 16,14"></polyline>
+            </svg>
+            <div class="sidebar-label">Clock</div>
+        </div>
+        <div class="sidebar-icon" id="zen-icon" onclick="toggleZenTimer()" title="Zen Timer">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"
+                stroke-linecap="round" stroke-linejoin="round">
+                <path d="M12 3c-4.97 0-9 4.03-9 9 0 4.97 4.03 9 9 9s9-4.03 9-9c0-4.97-4.03-9-9-9z"></path>
+                <path d="M7 12c1.5-2 4-3 8-3" />
+            </svg>
+            <div class="sidebar-label">Zen</div>
+        </div>
+    </div>
+
+    <script src="app_enhanced_with_clock.js"></script>
+    <!-- Notes Panel -->
+    <div id="notes-panel" class="notes-panel" style="display:none;">
+        <div class="notes-header">
+            <div class="notes-title">Session Notes</div>
+            <div class="notes-actions">
+                <button class="notes-download" onclick="downloadNotes()" title="Download notes">⬇</button>
+                <button class="notes-clear" onclick="clearNotes()" title="Clear notes">Clear</button>
+                <button class="notes-close" onclick="closeNotesPanel()" title="Close">✕</button>
+            </div>
+        </div>
+        <textarea id="notes-textarea" class="notes-textarea"
+            placeholder="Take notes during your coding session..."></textarea>
+        <div class="notes-footer">
+            <span id="notes-status" class="notes-status">Saved locally</span>
+            <button class="notes-save" onclick="saveNotes()">Save</button>
+        </div>
+    </div>
+    <!-- Cheatsheet Panel -->
+    <div id="cheatsheet-panel" class="cheatsheet-panel" style="display:none;">
+        <div class="cheatsheet-header">
+            <div class="cheatsheet-title">Python Cheatsheet</div>
+            <div class="cheatsheet-actions">
+                <input type="text" id="cheatsheet-search" placeholder="Search..." oninput="filterCheatsheet()">
+                <button class="cheatsheet-close" onclick="toggleCheatsheetPanel(false)" title="Close">✕</button>
+            </div>
+        </div>
+        <div id="cheatsheet-content" class="cheatsheet-content">
+            <!-- Content will be loaded dynamically -->
+            <div class="loading-spinner">Loading...</div>
+        </div>
+    </div>
+
+    <!-- Zen Timer Panel -->
+    <div id="zen-timer" class="zen-timer" style="display:none;">
+        <div class="zen-header">
+            <div class="zen-title">Zen Timer</div>
+            <div class="zen-actions">
+                <button class="zen-close" onclick="toggleZenTimer(false)">✕</button>
+            </div>
+        </div>
+        <div class="zen-body">
+            <div class="zen-circle-wrap">
+                <svg class="zen-circle" viewBox="0 0 120 120">
+                    <circle class="zen-track" cx="60" cy="60" r="52" stroke-width="12" fill="none"></circle>
+                    <circle class="zen-progress" cx="60" cy="60" r="52" stroke-width="12" fill="none"
+                        stroke-linecap="round"></circle>
+                    <text x="60" y="66" text-anchor="middle" class="zen-time">00:00</text>
+                </svg>
+            </div>
+            <div class="zen-controls">
+                <button onclick="setZenPreset(5)">5</button>
+                <button onclick="setZenPreset(10)">10</button>
+                <button onclick="setZenPreset(25)">25</button>
+                <button onclick="setZenPreset(50)">50</button>
+            </div>
+            <div class="zen-ops">
+                <button id="zen-ambient-toggle" onclick="toggleAmbient()" title="Toggle ambient sound">Ambient</button>
+                <button id="zen-start" onclick="zenStartPause()">Start</button>
+                <button onclick="zenReset()">Reset</button>
+            </div>
+            <div class="zen-volume-control">
+                <label for="zen-volume" title="Ambient Volume">🔊</label>
+                <input type="range" id="zen-volume" min="0" max="1" step="0.01"
+                    oninput="updateAmbientVolume(this.value)">
+            </div>
+        </div>
+        <div class="zen-footer">Relax, focus, breathe — the bell will ring when time's up.</div>
+    </div>
+
+    <!-- Code Examples Panel -->
+    <div id="examples-panel" class="examples-panel" style="display:none;">
+        <div class="examples-header">
+            <div class="examples-title">📚 Code Examples</div>
+            <div class="examples-actions">
+                <button class="examples-close" onclick="toggleExamplesPanel(false)" title="Close">✕</button>
+            </div>
+        </div>
+        <div class="examples-content">
+            <p class="examples-intro">Click any example to copy it to your editor. Great for testing the Scope
+                Visualizer!</p>
+
+            <!-- Basics Category -->
+            <div class="example-category">
+                <h3 class="category-title">🎯 Basics</h3>
+
+                <div class="example-card" onclick="loadExample('hello_world')">
+                    <div class="example-header">
+                        <span class="example-name">👋 Hello World</span>
+                        <span class="example-badge">Beginner</span>
+                    </div>
+                    <p class="example-desc">Your first Python program with variables and print</p>
+                </div>
+
+                <div class="example-card" onclick="loadExample('simple_math')">
+                    <div class="example-header">
+                        <span class="example-name">🔢 Simple Calculator</span>
+                        <span class="example-badge">Beginner</span>
+                    </div>
+                    <p class="example-desc">Basic arithmetic operations with functions</p>
+                </div>
+
+                <div class="example-card" onclick="loadExample('variables')">
+                    <div class="example-header">
+                        <span class="example-name">📦 Variables Demo</span>
+                        <span class="example-badge">Beginner</span>
+                    </div>
+                    <p class="example-desc">Shows local vs global variables clearly</p>
+                </div>
+            </div>
+
+            <!-- Functions Category -->
+            <div class="example-category">
+                <h3 class="category-title">⚡ Functions</h3>
+
+                <div class="example-card" onclick="loadExample('factorial')">
+                    <div class="example-header">
+                        <span class="example-name">🔁 Factorial</span>
+                        <span class="example-badge">Easy</span>
+                    </div>
+                    <p class="example-desc">Recursive and iterative factorial functions</p>
+                </div>
+
+                <div class="example-card" onclick="loadExample('fibonacci')">
+                    <div class="example-header">
+                        <span class="example-name">🌀 Fibonacci</span>
+                        <span class="example-badge">Easy</span>
+                    </div>
+                    <p class="example-desc">Generate Fibonacci sequence</p>
+                </div>
+
+                <div class="example-card" onclick="loadExample('nested_functions')">
+                    <div class="example-header">
+                        <span class="example-name">🪆 Nested Functions</span>
+                        <span class="example-badge">Medium</span>
+                    </div>
+                    <p class="example-desc">Perfect for testing scope visualization</p>
+                </div>
+            </div>
+
+            <!-- Loops Category -->
+            <div class="example-category">
+                <h3 class="category-title">🔄 Loops</h3>
+
+                <div class="example-card" onclick="loadExample('for_loop')">
+                    <div class="example-header">
+                        <span class="example-name">➰ For Loop Basics</span>
+                        <span class="example-badge">Beginner</span>
+                    </div>
+                    <p class="example-desc">Learn for loops with examples</p>
+                </div>
+
+                <div class="example-card" onclick="loadExample('while_loop')">
+                    <div class="example-header">
+                        <span class="example-name">🔁 While Loop</span>
+                        <span class="example-badge">Beginner</span>
+                    </div>
+                    <p class="example-desc">While loop with counter example</p>
+                </div>
+
+                <div class="example-card" onclick="loadExample('nested_loops')">
+                    <div class="example-header">
+                        <span class="example-name">🌀 Nested Loops</span>
+                        <span class="example-badge">Medium</span>
+                    </div>
+                    <p class="example-desc">Multiplication table with nested loops</p>
+                </div>
+            </div>
+
+            <!-- Data Structures Category -->
+            <div class="example-category">
+                <h3 class="category-title">📊 Data Structures</h3>
+
+                <div class="example-card" onclick="loadExample('list_operations')">
+                    <div class="example-header">
+                        <span class="example-name">📝 List Operations</span>
+                        <span class="example-badge">Easy</span>
+                    </div>
+                    <p class="example-desc">Common list methods and operations</p>
+                </div>
+
+                <div class="example-card" onclick="loadExample('dictionary')">
+                    <div class="example-header">
+                        <span class="example-name">🗂️ Dictionary Demo</span>
+                        <span class="example-badge">Easy</span>
+                    </div>
+                    <p class="example-desc">Working with dictionaries and loops</p>
+                </div>
+
+                <div class="example-card" onclick="loadExample('list_comprehension')">
+                    <div class="example-header">
+                        <span class="example-name">✨ List Comprehension</span>
+                        <span class="example-badge">Medium</span>
+                    </div>
+                    <p class="example-desc">Elegant list creation in one line</p>
+                </div>
+            </div>
+        </div>
+    </div>
+</body>
+
+</html>
